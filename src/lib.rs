@@ -176,6 +176,28 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "found record with 3 fields")]
+    fn from_csv_more_attributes() {
+        Context::from_csv(
+            r#",running,   artificial,extra
+                pond,,X
+                river, x ,"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "found record with 3 fields")]
+    fn from_csv_less_attributes() {
+        Context::from_csv(
+            r#",running
+                pond,,X
+                river, x ,"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
     fn intents() {
         let context = Context::from_csv(
             r#",running,   artificial,small
