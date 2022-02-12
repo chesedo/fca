@@ -56,11 +56,11 @@ impl Context {
         })
     }
 
-    pub fn get_intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
+    pub fn intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
         Self::der(&self.objects, objects, self.array.rows(), &self.attributes)
     }
 
-    pub fn get_extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
+    pub fn extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
         Self::der(
             &self.attributes,
             attributes,
@@ -69,14 +69,14 @@ impl Context {
         )
     }
 
-    pub fn get_closure_intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
-        let attributes = self.get_intents(objects)?;
-        self.get_extents(&attributes)
+    pub fn closure_intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
+        let attributes = self.intents(objects)?;
+        self.extents(&attributes)
     }
 
-    pub fn get_closure_extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
-        let objects = self.get_extents(attributes)?;
-        self.get_intents(&objects)
+    pub fn closure_extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
+        let objects = self.extents(attributes)?;
+        self.intents(&objects)
     }
 
     fn der<'a>(
@@ -199,7 +199,7 @@ mod tests {
             context
         );
         assert_eq!(
-            context.get_intents(&["pond"]),
+            context.intents(&["pond"]),
             Some(vec!["artificial"]),
             "ponds should be artificial {}",
             context
@@ -239,17 +239,17 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.get_intents(&["pond"]);
+        let actual = context.intents(&["pond"]);
         let expected = Some(vec!["artificial", "small"]);
 
         assert_eq!(actual, expected);
 
-        let actual = context.get_intents(&["canal", "river"]);
+        let actual = context.intents(&["canal", "river"]);
         let expected = Some(vec!["running"]);
 
         assert_eq!(actual, expected);
 
-        assert_eq!(context.get_intents(&["missing"]), None);
+        assert_eq!(context.intents(&["missing"]), None);
     }
 
     #[test]
@@ -261,17 +261,17 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.get_extents(&["inland"]);
+        let actual = context.extents(&["inland"]);
         let expected = Some(vec!["pond", "river"]);
 
         assert_eq!(actual, expected);
 
-        let actual = context.get_extents(&["inland", "running"]);
+        let actual = context.extents(&["inland", "running"]);
         let expected = Some(vec!["river"]);
 
         assert_eq!(actual, expected);
 
-        assert_eq!(context.get_extents(&["missing"]), None);
+        assert_eq!(context.extents(&["missing"]), None);
     }
 
     #[test]
@@ -284,7 +284,7 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.get_closure_intents(&["pond"]);
+        let actual = context.closure_intents(&["pond"]);
         let expected = Some(vec!["pond"]);
     }
 
@@ -297,7 +297,7 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.get_closure_extents(&["inland"]);
+        let actual = context.closure_extents(&["inland"]);
         let expected = Some(vec!["inland"]);
 
         assert_eq!(actual, expected);
