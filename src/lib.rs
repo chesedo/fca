@@ -60,21 +60,42 @@ impl Context {
         let index = self.objects.iter().position(|o| o == object)?;
         let row = self.array.row(index);
 
-        Some(
-            self.attributes
-                .iter()
-                .zip(row)
-                .filter_map(
-                    |(attribute, has)| {
-                        if *has {
-                            Some(attribute.as_str())
-                        } else {
-                            None
-                        }
-                    },
-                )
-                .collect::<Vec<_>>(),
-        )
+        let intents = self
+            .attributes
+            .iter()
+            .zip(row)
+            .filter_map(
+                |(attribute, has)| {
+                    if *has {
+                        Some(attribute.as_str())
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect();
+
+        Some(intents)
+    }
+
+    pub fn get_extents(&self, attribute: &str) -> Option<Vec<&str>> {
+        let index = self.attributes.iter().position(|a| a == attribute)?;
+        let col = self.array.column(index);
+
+        let extents = self
+            .objects
+            .iter()
+            .zip(col)
+            .filter_map(|(object, belongs)| {
+                if *belongs {
+                    Some(object.as_str())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Some(extents)
     }
 
     pub fn object_has_attribute(&self, object: &str, attribute: &str) -> Option<bool> {
@@ -140,13 +161,51 @@ mod tests {
         )
         .unwrap();
 
-        assert!(context.array[[0, 1]], "{}", context);
+        assert!(
+            context.array[[0, 1]],
+            "ponds should be artificial {}",
+            context
+        );
         assert_eq!(
             context.get_intents("pond"),
             Some(vec!["artificial"]),
-            "{}",
+            "ponds should be artificial {}",
             context
         );
-        assert!(context.object_has_attribute("river", "running").unwrap(),);
+        assert_eq!(context.object_has_attribute("river", "running"), Some(true));
+    }
+
+    #[test]
+    fn intents() {
+        let context = Context::from_csv(
+            r#",running,   artificial,small
+                pond,,X,X
+                river, x ,,"#,
+        )
+        .unwrap();
+
+        let actual = context.get_intents("pond");
+        let expected = Some(vec!["artificial", "small"]);
+
+        assert_eq!(actual, expected);
+
+        assert_eq!(context.get_intents("missing"), None);
+    }
+
+    #[test]
+    fn extents() {
+        let context = Context::from_csv(
+            r#",running,   artificial,inland
+                pond,,X,X
+                river, x ,,X"#,
+        )
+        .unwrap();
+
+        let actual = context.get_extents("inland");
+        let expected = Some(vec!["pond", "river"]);
+
+        assert_eq!(actual, expected);
+
+        assert_eq!(context.get_extents("missing"), None);
     }
 }
