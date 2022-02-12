@@ -2,7 +2,7 @@ use anyhow::Result;
 use csv::Reader;
 use std::fmt;
 
-use ndarray::{Array, Array2, ArrayView, Axis};
+use ndarray::{iter::Lanes, Array, Array2, ArrayView, Axis, Dim};
 
 struct Context {
     array: Array2<bool>,
@@ -56,17 +56,55 @@ impl Context {
         })
     }
 
-    pub fn get_intents(&self, object: &str) -> Option<Vec<&str>> {
-        let index = self.objects.iter().position(|o| o == object)?;
-        let row = self.array.row(index);
+    pub fn get_intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
+        Self::der(&self.objects, objects, self.array.rows(), &self.attributes)
+    }
 
-        let intents = self
-            .attributes
+    pub fn get_extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
+        Self::der(
+            &self.attributes,
+            attributes,
+            self.array.columns(),
+            &self.objects,
+        )
+    }
+
+    fn der<'a>(
+        inputs_named: &'a Vec<String>,
+        inputs: &[&str],
+        set: Lanes<bool, Dim<[usize; 1]>>,
+        outputs_named: &'a Vec<String>,
+    ) -> Option<Vec<&'a str>> {
+        let indices: Vec<_> = inputs_named
             .iter()
-            .zip(row)
+            .enumerate()
+            .filter_map(|(i, o)| {
+                if inputs.contains(&o.as_str()) {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let der = set
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, r)| {
+                if indices.contains(&i) {
+                    Some(r.into_iter().map(ToOwned::to_owned).collect::<Vec<bool>>())
+                } else {
+                    None
+                }
+            })
+            .reduce(bitand)?;
+
+        let output = outputs_named
+            .iter()
+            .zip(der)
             .filter_map(
                 |(attribute, has)| {
-                    if *has {
+                    if has {
                         Some(attribute.as_str())
                     } else {
                         None
@@ -75,27 +113,7 @@ impl Context {
             )
             .collect();
 
-        Some(intents)
-    }
-
-    pub fn get_extents(&self, attribute: &str) -> Option<Vec<&str>> {
-        let index = self.attributes.iter().position(|a| a == attribute)?;
-        let col = self.array.column(index);
-
-        let extents = self
-            .objects
-            .iter()
-            .zip(col)
-            .filter_map(|(object, belongs)| {
-                if *belongs {
-                    Some(object.as_str())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        Some(extents)
+        Some(output)
     }
 
     pub fn object_has_attribute(&self, object: &str, attribute: &str) -> Option<bool> {
@@ -104,6 +122,10 @@ impl Context {
 
         self.array.get((object_index, attribute_index)).map(|b| *b)
     }
+}
+
+fn bitand<'a>(accum: Vec<bool>, new: Vec<bool>) -> Vec<bool> {
+    accum.iter().zip(new).map(|(a, n)| a & n).collect()
 }
 
 impl fmt::Display for Context {
@@ -167,7 +189,7 @@ mod tests {
             context
         );
         assert_eq!(
-            context.get_intents("pond"),
+            context.get_intents(&["pond"]),
             Some(vec!["artificial"]),
             "ponds should be artificial {}",
             context
@@ -202,16 +224,22 @@ mod tests {
         let context = Context::from_csv(
             r#",running,   artificial,small
                 pond,,X,X
-                river, x ,,"#,
+                river, x ,,
+                canal,X,X,"#,
         )
         .unwrap();
 
-        let actual = context.get_intents("pond");
+        let actual = context.get_intents(&["pond"]);
         let expected = Some(vec!["artificial", "small"]);
 
         assert_eq!(actual, expected);
 
-        assert_eq!(context.get_intents("missing"), None);
+        let actual = context.get_intents(&["canal", "river"]);
+        let expected = Some(vec!["running"]);
+
+        assert_eq!(actual, expected);
+
+        assert_eq!(context.get_intents(&["missing"]), None);
     }
 
     #[test]
@@ -223,11 +251,16 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.get_extents("inland");
+        let actual = context.get_extents(&["inland"]);
         let expected = Some(vec!["pond", "river"]);
 
         assert_eq!(actual, expected);
 
-        assert_eq!(context.get_extents("missing"), None);
+        let actual = context.get_extents(&["inland", "running"]);
+        let expected = Some(vec!["river"]);
+
+        assert_eq!(actual, expected);
+
+        assert_eq!(context.get_extents(&["missing"]), None);
     }
 }
