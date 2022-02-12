@@ -85,6 +85,11 @@ impl Context {
         set: Lanes<bool, Dim<[usize; 1]>>,
         outputs_named: &'a Vec<String>,
     ) -> Option<Vec<&'a str>> {
+        // Empty set is always all the attributes / objects
+        if inputs.is_empty() {
+            return Some(outputs_named.into_iter().map(|s| s.as_str()).collect());
+        }
+
         let indices: Vec<_> = inputs_named
             .iter()
             .enumerate()
@@ -250,6 +255,10 @@ mod tests {
         assert_eq!(actual, expected);
 
         assert_eq!(context.intents(&["missing"]), None);
+        assert_eq!(
+            context.intents(&[]),
+            Some(vec!["running", "artificial", "small"])
+        );
     }
 
     #[test]
@@ -272,6 +281,7 @@ mod tests {
         assert_eq!(actual, expected);
 
         assert_eq!(context.extents(&["missing"]), None);
+        assert_eq!(context.extents(&[]), Some(vec!["pond", "river"]));
     }
 
     #[test]
