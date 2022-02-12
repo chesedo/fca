@@ -69,6 +69,16 @@ impl Context {
         )
     }
 
+    pub fn get_closure_intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
+        let attributes = self.get_intents(objects)?;
+        self.get_extents(&attributes)
+    }
+
+    pub fn get_closure_extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
+        let objects = self.get_extents(attributes)?;
+        self.get_intents(&objects)
+    }
+
     fn der<'a>(
         inputs_named: &'a Vec<String>,
         inputs: &[&str],
@@ -262,5 +272,34 @@ mod tests {
         assert_eq!(actual, expected);
 
         assert_eq!(context.get_extents(&["missing"]), None);
+    }
+
+    #[test]
+    fn closure_intents() {
+        let context = Context::from_csv(
+            r#"      ,running,artificial,small
+                pond ,       ,  X       , X
+                river, x     ,          ,
+                canal, X     ,  X       ,"#,
+        )
+        .unwrap();
+
+        let actual = context.get_closure_intents(&["pond"]);
+        let expected = Some(vec!["pond"]);
+    }
+
+    #[test]
+    fn closure_extents() {
+        let context = Context::from_csv(
+            r#",running,   artificial,inland
+                pond,,X,X
+                river, x ,,X"#,
+        )
+        .unwrap();
+
+        let actual = context.get_closure_extents(&["inland"]);
+        let expected = Some(vec!["inland"]);
+
+        assert_eq!(actual, expected);
     }
 }
