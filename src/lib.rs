@@ -35,8 +35,8 @@ where
     None
 }
 
-fn lexical_m(m: &[&str], a: &Vec<&str>, b: &Vec<&str>) -> Option<usize> {
-    let mut new = b.clone();
+fn lexical_m(m: &[&str], a: &[&str], b: &[&str]) -> Option<usize> {
+    let mut new = Vec::from(b);
     new.retain(|n| !a[0..a.len() - 1].contains(n));
 
     let pos = m.iter().position(|&s| s == new[0])?;

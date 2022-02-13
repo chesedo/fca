@@ -90,14 +90,14 @@ impl Context {
     }
 
     fn der<'a>(
-        inputs_named: &'a Vec<String>,
+        inputs_named: &'a [String],
         inputs: &[&str],
         set: Lanes<bool, Dim<[usize; 1]>>,
-        outputs_named: &'a Vec<String>,
+        outputs_named: &'a [String],
     ) -> Option<Vec<&'a str>> {
         // Empty set is always all the attributes / objects
         if inputs.is_empty() {
-            return Some(outputs_named.into_iter().map(|s| s.as_str()).collect());
+            return Some(outputs_named.iter().map(|s| s.as_str()).collect());
         }
 
         let indices: Vec<_> = inputs_named
@@ -145,7 +145,7 @@ impl Context {
         let object_index = self.objects.iter().position(|o| o == object)?;
         let attribute_index = self.attributes.iter().position(|o| o == attribute)?;
 
-        self.array.get((object_index, attribute_index)).map(|b| *b)
+        self.array.get((object_index, attribute_index)).copied()
     }
 
     pub fn concepts(&self) -> Vec<Vec<&str>> {
@@ -164,7 +164,7 @@ impl Context {
     }
 }
 
-fn bitand<'a>(accum: Vec<bool>, new: Vec<bool>) -> Vec<bool> {
+fn bitand(accum: Vec<bool>, new: Vec<bool>) -> Vec<bool> {
     accum.iter().zip(new).map(|(a, n)| a & n).collect()
 }
 
