@@ -137,6 +137,21 @@ impl Context {
 
         self.array.get((object_index, attribute_index)).map(|b| *b)
     }
+
+    pub fn concepts(&self) -> Vec<Vec<&str>> {
+        let a: Vec<&str> = self.attributes.iter().rev().map(|s| s.as_str()).collect();
+
+        let mut concepts = Vec::new();
+        let mut current = self.closure_extents(&[]);
+
+        while current != None {
+            let c = current.unwrap();
+            concepts.push(c.clone());
+            current = next_closure(&a[..], c, |n| self.closure_extents(n));
+        }
+
+        concepts
+    }
 }
 
 fn bitand<'a>(accum: Vec<bool>, new: Vec<bool>) -> Vec<bool> {
@@ -395,5 +410,40 @@ mod tests {
                 .closure_extents(n)),
             None
         );
+    }
+
+    #[test]
+    fn concepts() {
+        let context = Context::from_csv(
+            r#",a,b,c,d,e,f
+              1, ,x,x, ,x,x
+              2, ,x,x, , , 
+              3, , , , , , 
+              4, , , , ,x,x
+              5, , ,x, ,x,x
+              6, ,x, , , , 
+              7, , ,x, ,x,x
+              8, , ,x,x, ,x
+              9, , ,x, ,x,x
+             10, ,x,x,x,x,x"#,
+        )
+        .unwrap();
+
+        let expected = vec![
+            vec![],
+            vec!["f"],
+            vec!["e", "f"],
+            vec!["c"],
+            vec!["c", "f"],
+            vec!["c", "e", "f"],
+            vec!["c", "d", "f"],
+            vec!["b"],
+            vec!["b", "c"],
+            vec!["b", "c", "e", "f"],
+            vec!["b", "c", "d", "e", "f"],
+            vec!["a", "b", "c", "d", "e", "f"],
+        ];
+
+        assert_eq!(context.concepts(), expected);
     }
 }
