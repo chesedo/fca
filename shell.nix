@@ -1,7 +1,11 @@
-{ pkgs ? import <nixpkgs> { } }:
-pkgs.mkShell {
-  nativeBuildInputs = with pkgs; [ rustc cargo ];
-  buildInputs = with pkgs; [ rustfmt clippy rust-analyzer cargo-watch ];
+{ pkgs ? import <nixpkgs> {
+    overlays = [ (import (builtins.fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz") ) ];
+} }:
 
-  RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
+pkgs.mkShell {
+  buildInputs = with pkgs; [
+    rust-bin.nightly.latest.default
+    rust-analyzer
+    cargo-watch
+  ];
 }
