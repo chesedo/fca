@@ -1,32 +1,35 @@
-struct Implication<'a> {
-    premise: &'a [&'a str],
-    conclusion: &'a [&'a str],
+use std::collections::BTreeSet;
+
+#[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
+pub struct Implication {
+    pub premise: Vec<String>,
+    pub conclusion: Vec<String>,
 }
 
-fn preclosure_operator<'a>(basis: &'a [&Implication], set: &'a [&str]) -> Vec<&'a str> {
+pub(crate) fn preclosure_operator(basis: &[Implication], set: &[String]) -> Vec<String> {
     if set.is_empty() {
         return Vec::new();
     }
 
-    let mut x = set.to_vec();
+    let mut x = BTreeSet::from_iter(set.to_vec());
     let mut stable = false;
     let mut basis = basis.to_vec();
 
     while !stable {
-        let mut new: Vec<&str> = basis
+        let new: Vec<_> = basis
             .drain_filter(|i| i.premise.iter().all(|p| x.contains(p)))
             .flat_map(|i| i.conclusion)
-            .map(|s| *s)
             .collect();
 
         if new.is_empty() {
             stable = true;
         } else {
-            x.append(&mut new);
+            x.extend(new);
         }
     }
 
-    x
+    x.into_iter().collect()
 }
 
 #[cfg(test)]
@@ -35,9 +38,9 @@ mod tests {
 
     #[test]
     fn preclosure_operator_empty() {
-        let basis = [&Implication {
-            premise: &["a"],
-            conclusion: &["b"],
+        let basis = [Implication {
+            premise: vec!["a".to_string()],
+            conclusion: vec!["b".to_string()],
         }];
         let set = [];
 
@@ -49,11 +52,11 @@ mod tests {
 
     #[test]
     fn preclosure_operator_non_matching() {
-        let basis = [&Implication {
-            premise: &["a"],
-            conclusion: &["b"],
+        let basis = [Implication {
+            premise: vec!["a".to_string()],
+            conclusion: vec!["b".to_string()],
         }];
-        let set = ["c"];
+        let set = ["c".to_string()];
 
         let actual = preclosure_operator(&basis, &set);
         let expected = ["c"];
@@ -63,11 +66,11 @@ mod tests {
 
     #[test]
     fn preclosure_operator_matching() {
-        let basis = [&Implication {
-            premise: &["a"],
-            conclusion: &["b"],
+        let basis = [Implication {
+            premise: vec!["a".to_string()],
+            conclusion: vec!["b".to_string()],
         }];
-        let set = ["a"];
+        let set = ["a".to_string()];
 
         let actual = preclosure_operator(&basis, &set);
         let expected = ["a", "b"];
@@ -78,18 +81,43 @@ mod tests {
     #[test]
     fn preclosure_operator_recursive() {
         let basis = [
-            &Implication {
-                premise: &["a"],
-                conclusion: &["b"],
+            Implication {
+                premise: vec!["a".to_string()],
+                conclusion: vec!["b".to_string()],
             },
-            &Implication {
-                premise: &["a", "b"],
-                conclusion: &["c", "d"],
+            Implication {
+                premise: vec!["a".to_string(), "b".to_string()],
+                conclusion: vec!["c".to_string(), "d".to_string()],
             },
         ];
-        let set = ["a"];
+        let set = ["a".to_string()];
 
         let actual = preclosure_operator(&basis, &set);
+        let expected = ["a", "b", "c", "d"];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn preclosure_operator_recursive_multiple() {
+        let basis = [
+            Implication {
+                premise: vec!["a".to_string()],
+                conclusion: vec!["b".to_string()],
+            },
+            Implication {
+                premise: vec!["a".to_string(), "b".to_string()],
+                conclusion: vec!["c".to_string(), "d".to_string()],
+            },
+            Implication {
+                premise: vec!["c".to_string()],
+                conclusion: vec!["d".to_string()],
+            },
+        ];
+        let set = ["a".to_string()];
+
+        let actual = preclosure_operator(&basis, &set);
+        // "d" should not appear twice
         let expected = ["a", "b", "c", "d"];
 
         assert_eq!(actual, expected);

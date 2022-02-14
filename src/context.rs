@@ -4,7 +4,10 @@ use std::{borrow::Cow, fmt};
 
 use ndarray::{iter::Lanes, Array, Array2, ArrayView, Axis, Dim};
 
-use crate::next_closure;
+use crate::{
+    implications::{preclosure_operator, Implication},
+    next_closure,
+};
 
 pub struct Context {
     array: Array2<bool>,
@@ -159,6 +162,37 @@ impl Context {
 
         concepts
     }
+
+    pub fn canonical_basis(&self) -> Vec<Implication> {
+        let mut l = Vec::new();
+        let mut a = Vec::new();
+        let m: Vec<_> = self
+            .attributes()
+            .into_iter()
+            .rev()
+            .map(|a| a.to_string())
+            .collect();
+
+        while a != m {
+            let closure = self.closure_extents(&a).unwrap();
+            if a != closure {
+                l.push(Implication {
+                    premise: a.clone(),
+                    conclusion: closure,
+                });
+            }
+
+            let next = next_closure(&m[..], &a, |n| Some(preclosure_operator(&l, n)));
+
+            if next.is_none() {
+                break;
+            }
+
+            a = next.unwrap();
+        }
+
+        l
+    }
 }
 
 fn bitand(accum: Vec<bool>, new: Vec<bool>) -> Vec<bool> {
@@ -193,6 +227,8 @@ impl fmt::Display for Context {
 
 #[cfg(test)]
 mod tests {
+    use crate::implications::Implication;
+
     use super::Context;
 
     #[test]
@@ -377,5 +413,59 @@ mod tests {
         ];
 
         assert_eq!(context.concepts(), expected);
+    }
+
+    #[test]
+    fn canonical_basis() {
+        let context = Context::from_csv(
+            r#",a,b,c,d,e
+              1, ,x, ,x, 
+              2, ,x, , ,x
+              3, , ,x, , 
+              4,x,x,x, , 
+              5, , , ,x, 
+              6, ,x,x, , 
+              7, , , , ,x"#,
+        )
+        .unwrap();
+
+        let expected = vec![
+            Implication {
+                premise: vec!["d".to_string(), "e".to_string()],
+                conclusion: vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["c".to_string(), "e".to_string()],
+                conclusion: vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["c".to_string(), "d".to_string()],
+                conclusion: vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["a".to_string()],
+                conclusion: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            },
+        ];
+
+        assert_eq!(context.canonical_basis(), expected);
     }
 }
