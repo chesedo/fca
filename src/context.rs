@@ -1,6 +1,6 @@
 use anyhow::Result;
 use csv::Reader;
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use ndarray::{iter::Lanes, Array, Array2, ArrayView, Axis, Dim};
 
@@ -21,12 +21,12 @@ impl Context {
         }
     }
 
-    pub fn objects(&self) -> impl DoubleEndedIterator<Item = &str> {
-        self.objects.iter().map(|s| s.as_str())
+    pub fn objects(&self) -> Cow<[String]> {
+        Cow::Borrowed(&self.objects)
     }
 
-    pub fn attributes(&self) -> impl DoubleEndedIterator<Item = &str> {
-        self.attributes.iter().map(|s| s.as_str())
+    pub fn attributes(&self) -> Cow<[String]> {
+        Cow::Borrowed(&self.attributes)
     }
 
     pub fn from_csv(data: &str) -> Result<Self> {
@@ -66,11 +66,11 @@ impl Context {
         })
     }
 
-    pub fn intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
+    pub fn intents(&self, objects: &[String]) -> Option<Vec<String>> {
         Self::der(&self.objects, objects, self.array.rows(), &self.attributes)
     }
 
-    pub fn extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
+    pub fn extents(&self, attributes: &[String]) -> Option<Vec<String>> {
         Self::der(
             &self.attributes,
             attributes,
@@ -79,37 +79,31 @@ impl Context {
         )
     }
 
-    pub fn closure_intents(&self, objects: &[&str]) -> Option<Vec<&str>> {
+    pub fn closure_intents(&self, objects: &[String]) -> Option<Vec<String>> {
         let attributes = self.intents(objects)?;
         self.extents(&attributes)
     }
 
-    pub fn closure_extents(&self, attributes: &[&str]) -> Option<Vec<&str>> {
+    pub fn closure_extents(&self, attributes: &[String]) -> Option<Vec<String>> {
         let objects = self.extents(attributes)?;
         self.intents(&objects)
     }
 
-    fn der<'a>(
-        inputs_named: &'a [String],
-        inputs: &[&str],
+    fn der(
+        inputs_named: &[String],
+        inputs: &[String],
         set: Lanes<bool, Dim<[usize; 1]>>,
-        outputs_named: &'a [String],
-    ) -> Option<Vec<&'a str>> {
+        outputs_named: &[String],
+    ) -> Option<Vec<String>> {
         // Empty set is always all the attributes / objects
         if inputs.is_empty() {
-            return Some(outputs_named.iter().map(|s| s.as_str()).collect());
+            return Some(outputs_named.to_vec());
         }
 
         let indices: Vec<_> = inputs_named
             .iter()
             .enumerate()
-            .filter_map(|(i, o)| {
-                if inputs.contains(&o.as_str()) {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|(i, o)| if inputs.contains(o) { Some(i) } else { None })
             .collect();
 
         let der = set
@@ -127,15 +121,13 @@ impl Context {
         let output = outputs_named
             .iter()
             .zip(der)
-            .filter_map(
-                |(attribute, has)| {
-                    if has {
-                        Some(attribute.as_str())
-                    } else {
-                        None
-                    }
-                },
-            )
+            .filter_map(|(attribute, has)| {
+                if has {
+                    Some(attribute.to_string())
+                } else {
+                    None
+                }
+            })
             .collect();
 
         Some(output)
@@ -148,8 +140,13 @@ impl Context {
         self.array.get((object_index, attribute_index)).copied()
     }
 
-    pub fn concepts(&self) -> Vec<Vec<&str>> {
-        let a: Vec<&str> = self.attributes().rev().collect();
+    pub fn concepts(&self) -> Vec<Vec<String>> {
+        let a: Vec<String> = self
+            .attributes()
+            .into_iter()
+            .rev()
+            .map(|a| a.to_string())
+            .collect();
 
         let mut concepts = Vec::new();
         let mut current = self.closure_extents(&[]);
@@ -157,7 +154,7 @@ impl Context {
         while current != None {
             let c = current.unwrap();
             concepts.push(c.clone());
-            current = next_closure(&a[..], c, |n| self.closure_extents(n));
+            current = next_closure(&a[..], &c[..], |n| self.closure_extents(n));
         }
 
         concepts
@@ -229,8 +226,8 @@ mod tests {
             context
         );
         assert_eq!(
-            context.intents(&["pond"]),
-            Some(vec!["artificial"]),
+            context.intents(&["pond".to_string()]),
+            Some(vec!["artificial".to_string()]),
             "ponds should be artificial {}",
             context
         );
@@ -269,20 +266,24 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.intents(&["pond"]);
-        let expected = Some(vec!["artificial", "small"]);
+        let actual = context.intents(&["pond".to_string()]);
+        let expected = Some(vec!["artificial".to_string(), "small".to_string()]);
 
         assert_eq!(actual, expected);
 
-        let actual = context.intents(&["canal", "river"]);
-        let expected = Some(vec!["running"]);
+        let actual = context.intents(&["canal".to_string(), "river".to_string()]);
+        let expected = Some(vec!["running".to_string()]);
 
         assert_eq!(actual, expected);
 
-        assert_eq!(context.intents(&["missing"]), None);
+        assert_eq!(context.intents(&["missing".to_string()]), None);
         assert_eq!(
             context.intents(&[]),
-            Some(vec!["running", "artificial", "small"])
+            Some(vec![
+                "running".to_string(),
+                "artificial".to_string(),
+                "small".to_string()
+            ])
         );
     }
 
@@ -295,18 +296,21 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.extents(&["inland"]);
-        let expected = Some(vec!["pond", "river"]);
+        let actual = context.extents(&["inland".to_string()]);
+        let expected = Some(vec!["pond".to_string(), "river".to_string()]);
 
         assert_eq!(actual, expected);
 
-        let actual = context.extents(&["inland", "running"]);
-        let expected = Some(vec!["river"]);
+        let actual = context.extents(&["inland".to_string(), "running".to_string()]);
+        let expected = Some(vec!["river".to_string()]);
 
         assert_eq!(actual, expected);
 
-        assert_eq!(context.extents(&["missing"]), None);
-        assert_eq!(context.extents(&[]), Some(vec!["pond", "river"]));
+        assert_eq!(context.extents(&["missing".to_string()]), None);
+        assert_eq!(
+            context.extents(&[]),
+            Some(vec!["pond".to_string(), "river".to_string()])
+        );
     }
 
     #[test]
@@ -319,8 +323,8 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.closure_intents(&["pond"]);
-        let expected = Some(vec!["pond"]);
+        let actual = context.closure_intents(&["pond".to_string()]);
+        let expected = Some(vec!["pond".to_string()]);
 
         assert_eq!(actual, expected);
     }
@@ -334,8 +338,8 @@ mod tests {
         )
         .unwrap();
 
-        let actual = context.closure_extents(&["inland"]);
-        let expected = Some(vec!["inland"]);
+        let actual = context.closure_extents(&["inland".to_string()]);
+        let expected = Some(vec!["inland".to_string()]);
 
         assert_eq!(actual, expected);
     }
