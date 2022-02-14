@@ -11,7 +11,7 @@ where
 {
     let mut subset = subset.to_vec();
 
-    for (index, m) in set.iter().enumerate() {
+    for (index, m) in set.iter().rev().enumerate() {
         if subset.contains(m) {
             subset.pop();
             continue;
@@ -20,10 +20,9 @@ where
         subset.push(m.to_string());
 
         let next = closure(&subset)?;
-        let m = lexical_m(set, &subset, &next)?;
+        let m = lexical_m(set, &subset, &next);
 
-        // Set is already reversed, therefore this boolean is not < (but its complement)
-        if m <= index {
+        if m >= (set.len() - index) {
             return Some(next);
         }
 
@@ -34,25 +33,57 @@ where
     None
 }
 
-fn lexical_m(m: &[String], a: &[String], b: &[String]) -> Option<usize> {
-    let mut new = Vec::from(b);
-    new.retain(|n| !a[0..a.len() - 1].contains(n));
+fn lexical_m(m: &[String], a: &[String], b: &[String]) -> usize {
+    let a = a.to_vec();
+    let b = b.to_vec();
 
-    let pos = m.iter().position(|s| s == &new[0])?;
+    for (i, x) in m.iter().enumerate() {
+        if a.contains(x) != b.contains(x) {
+            return i;
+        }
+    }
 
-    Some(pos)
+    m.len() + 1
 }
 
 #[cfg(test)]
 mod tests {
-    use super::next_closure;
+    use super::{lexical_m, next_closure};
+
+    #[test]
+    fn lexical_m_ordered() {
+        let m = &[
+            "a".to_string(),
+            "b".to_string(),
+            "c".to_string(),
+            "d".to_string(),
+        ];
+        let a = &["a".to_string(), "b".to_string(), "d".to_string()];
+        let b = &["a".to_string(), "b".to_string(), "c".to_string()];
+
+        assert_eq!(lexical_m(m, a, b), 2);
+    }
+
+    #[test]
+    fn lexical_m_unordered() {
+        let m = &[
+            "d".to_string(),
+            "b".to_string(),
+            "a".to_string(),
+            "c".to_string(),
+        ];
+        let a = &["d".to_string(), "b".to_string(), "a".to_string()];
+        let b = &["d".to_string(), "b".to_string(), "c".to_string()];
+
+        assert_eq!(lexical_m(m, a, b), 2);
+    }
 
     #[test]
     fn next_closure_jump() {
         let set = &[
-            "small".to_string(),
-            "artificial".to_string(),
             "running".to_string(),
+            "artificial".to_string(),
+            "small".to_string(),
         ];
 
         assert_eq!(
@@ -68,9 +99,9 @@ mod tests {
     #[test]
     fn next_closure_double() {
         let set = &[
-            "small".to_string(),
-            "artificial".to_string(),
             "running".to_string(),
+            "artificial".to_string(),
+            "small".to_string(),
         ];
 
         assert_eq!(
@@ -89,9 +120,9 @@ mod tests {
     #[test]
     fn next_closure_single() {
         let set = &[
-            "small".to_string(),
-            "artificial".to_string(),
             "running".to_string(),
+            "artificial".to_string(),
+            "small".to_string(),
         ];
 
         assert_eq!(
@@ -108,9 +139,9 @@ mod tests {
     #[test]
     fn next_closure_end() {
         let set = &[
-            "small".to_string(),
-            "artificial".to_string(),
             "running".to_string(),
+            "artificial".to_string(),
+            "small".to_string(),
         ];
 
         assert_eq!(

@@ -122,4 +122,29 @@ mod tests {
 
         assert_eq!(actual, expected);
     }
+
+    #[test]
+    fn preclosure_operator_recursive_multiple_unordered() {
+        let basis = [
+            Implication {
+                premise: vec!["a".to_string()],
+                conclusion: vec!["b".to_string()],
+            },
+            Implication {
+                premise: vec!["b".to_string(), "a".to_string()],
+                conclusion: vec!["d".to_string(), "c".to_string()],
+            },
+            Implication {
+                premise: vec!["c".to_string()],
+                conclusion: vec!["d".to_string()],
+            },
+        ];
+        let set = ["a".to_string()];
+
+        let actual = preclosure_operator(&basis, &set);
+        // "d" should not appear twice
+        let expected = ["a", "b", "c", "d"];
+
+        assert_eq!(actual, expected);
+    }
 }

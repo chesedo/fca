@@ -147,7 +147,6 @@ impl Context {
         let a: Vec<String> = self
             .attributes()
             .into_iter()
-            .rev()
             .map(|a| a.to_string())
             .collect();
 
@@ -169,7 +168,6 @@ impl Context {
         let m: Vec<_> = self
             .attributes()
             .into_iter()
-            .rev()
             .map(|a| a.to_string())
             .collect();
 
