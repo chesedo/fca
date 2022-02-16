@@ -12,8 +12,8 @@ where
     let mut subset = subset.to_vec();
 
     for (index, m) in set.iter().rev().enumerate() {
-        if subset.contains(m) {
-            subset.pop();
+        if let Some(i) = subset.iter().position(|s| s == m) {
+            subset.remove(i);
             continue;
         }
 
@@ -43,7 +43,7 @@ fn lexical_m(m: &[String], a: &[String], b: &[String]) -> usize {
         }
     }
 
-    m.len() + 1
+    m.len()
 }
 
 #[cfg(test)]
