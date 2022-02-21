@@ -174,7 +174,7 @@ impl Context {
 
         while a != m {
             let closure = self.closure_extents(&a).unwrap();
-            if a != closure {
+            if !a.iter().all(|x| closure.contains(x)) || !closure.iter().all(|x| a.contains(x)) {
                 l.push(Implication {
                     premise: a.clone(),
                     conclusion: closure,
