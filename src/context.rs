@@ -9,6 +9,7 @@ use crate::{
     next_closure,
 };
 
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct Context {
     array: Array2<bool>,
     objects: Vec<String>,
@@ -191,6 +192,71 @@ impl Context {
 
         l
     }
+
+    pub fn attribute_exploration<F>(mut self, oracle_callback: F) -> (Vec<Implication>, Self)
+    where
+        F: Fn(&[String], &[String]) -> Option<(Option<String>, Vec<String>)>,
+    {
+        let mut l = Vec::new();
+        let mut a = Vec::new();
+        let m: Vec<_> = self
+            .attributes()
+            .into_iter()
+            .map(|a| a.to_string())
+            .collect();
+
+        while a != m {
+            let mut closure = self.closure_extents(&a).unwrap();
+
+            while !a.iter().all(|x| closure.contains(x)) || !closure.iter().all(|x| a.contains(x)) {
+                if let Some((name, mut attributes)) = oracle_callback(&a, &closure) {
+                    attributes.append(&mut a.clone());
+                    self.add_object(name, &attributes).unwrap();
+                } else {
+                    l.push(Implication {
+                        premise: a.clone(),
+                        conclusion: closure,
+                    });
+
+                    break;
+                }
+
+                closure = self.closure_extents(&a).unwrap();
+            }
+
+            let next = next_closure(&m[..], &a, |n| Some(preclosure_operator(&l, n)));
+
+            if next.is_none() {
+                break;
+            }
+
+            a = next.unwrap();
+        }
+
+        (l, self)
+    }
+
+    pub fn add_object(&mut self, name: Option<String>, attributes: &[String]) -> Result<()> {
+        if let Some(name) = name {
+            self.objects.push(name);
+        } else {
+            let name = self.objects.len() + 1;
+            self.objects.push(name.to_string());
+        }
+
+        let attributes: Vec<_> = self
+            .attributes
+            .iter()
+            .map(|a| attributes.contains(a))
+            .collect();
+
+        self.array.append(
+            Axis(0),
+            ArrayView::from_shape((1, attributes.len()), &attributes)?,
+        )?;
+
+        Ok(())
+    }
 }
 
 fn bitand(accum: Vec<bool>, new: Vec<bool>) -> Vec<bool> {
@@ -288,6 +354,55 @@ mod tests {
                 river, x ,"#,
         )
         .unwrap();
+    }
+
+    #[test]
+    fn add_object_unnamed() {
+        let mut input = Context::from_csv(
+            r#",running,   artificial,small
+                pond,,X,X
+                river, x ,,"#,
+        )
+        .unwrap();
+        let expected = Context::from_csv(
+            r#",running,   artificial,small
+                pond,,X,X
+                river, x ,,
+                3,X,X,"#,
+        )
+        .unwrap();
+
+        input
+            .add_object(None, &vec!["running".to_string(), "artificial".to_string()])
+            .unwrap();
+
+        assert_eq!(input, expected);
+    }
+
+    #[test]
+    fn add_object_named() {
+        let mut input = Context::from_csv(
+            r#",running,   artificial,small
+                pond,,X,X
+                river, x ,,"#,
+        )
+        .unwrap();
+        let expected = Context::from_csv(
+            r#",running,   artificial,small
+                pond,,X,X
+                river, x ,,
+                canal,X,X,"#,
+        )
+        .unwrap();
+
+        input
+            .add_object(
+                Some("canal".to_string()),
+                &vec!["running".to_string(), "artificial".to_string()],
+            )
+            .unwrap();
+
+        assert_eq!(input, expected);
     }
 
     #[test]
@@ -465,5 +580,168 @@ mod tests {
         ];
 
         assert_eq!(context.canonical_basis(), expected);
+    }
+
+    #[test]
+    fn attribute_exploration() {
+        let context = Context::from_csv(
+            r#",disjoint,overlap,parallel,common vertex,common segment,common edge
+              1,        ,       ,        ,             ,              ,           
+              2,   x    ,       ,        ,             ,              ,           
+              3,        ,   x   ,        ,             ,              ,           
+              4,        ,       ,        ,      x      ,              ,           
+              5,   x    ,       ,    x   ,             ,              ,           
+              6,        ,   x   ,    x   ,             ,              ,           
+              7,        ,       ,    x   ,             ,       x      ,           
+              8,        ,       ,    x   ,      x      ,              ,           
+              9,        ,       ,    x   ,      x      ,       x      ,     x     
+             10,        ,   x   ,    x   ,      x      ,       x      ,     x     "#,
+        )
+        .unwrap();
+
+        let (basis, new) = context.attribute_exploration(|premise, conclusion| {
+            let premise = premise.into_iter().map(|s| s.as_str()).collect::<Vec<_>>();
+            let conclusion = conclusion
+                .into_iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>();
+
+            match (&premise[..], &conclusion[..]) {
+                (
+                    ["common edge"],
+                    ["parallel", "common vertex", "common segment", "common edge"],
+                ) => None,
+                (["common segment"], ["parallel", "common segment"]) => None,
+                (
+                    ["common segment", "common vertex", "parallel"],
+                    ["parallel", "common vertex", "common segment", "common edge"],
+                ) => None,
+                (
+                    ["common vertex", "overlap"],
+                    ["overlap", "parallel", "common vertex", "common segment", "common edge"],
+                ) => Some((None, Vec::new())),
+                (
+                    ["common segment", "overlap", "parallel"],
+                    ["overlap", "parallel", "common vertex", "common segment", "common edge"],
+                ) => Some((None, Vec::new())),
+                (
+                    ["common vertex", "overlap", "parallel"],
+                    ["overlap", "parallel", "common vertex", "common segment", "common edge"],
+                ) => None,
+                (
+                    ["common vertex", "disjoint"],
+                    ["disjoint", "overlap", "parallel", "common vertex", "common segment", "common edge"],
+                ) => None,
+                (
+                    ["common segment", "disjoint", "parallel"],
+                    ["disjoint", "overlap", "parallel", "common vertex", "common segment", "common edge"],
+                ) => None,
+                (
+                    ["disjoint", "overlap"],
+                    ["disjoint", "overlap", "parallel", "common vertex", "common segment", "common edge"],
+                ) => None,
+                _ => panic!("did not expect oracle calls: premise = {:?}, conslusion = {:?}", premise, conclusion),
+            }
+        });
+
+        let expected_basis = vec![
+            Implication {
+                premise: vec!["common edge".to_string()],
+                conclusion: vec![
+                    "parallel".to_string(),
+                    "common vertex".to_string(),
+                    "common segment".to_string(),
+                    "common edge".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["common segment".to_string()],
+                conclusion: vec!["parallel".to_string(), "common segment".to_string()],
+            },
+            Implication {
+                premise: vec![
+                    "common segment".to_string(),
+                    "common vertex".to_string(),
+                    "parallel".to_string(),
+                ],
+                conclusion: vec![
+                    "parallel".to_string(),
+                    "common vertex".to_string(),
+                    "common segment".to_string(),
+                    "common edge".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec![
+                    "common vertex".to_string(),
+                    "overlap".to_string(),
+                    "parallel".to_string(),
+                ],
+                conclusion: vec![
+                    "overlap".to_string(),
+                    "parallel".to_string(),
+                    "common vertex".to_string(),
+                    "common segment".to_string(),
+                    "common edge".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["common vertex".to_string(), "disjoint".to_string()],
+                conclusion: vec![
+                    "disjoint".to_string(),
+                    "overlap".to_string(),
+                    "parallel".to_string(),
+                    "common vertex".to_string(),
+                    "common segment".to_string(),
+                    "common edge".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec![
+                    "common segment".to_string(),
+                    "disjoint".to_string(),
+                    "parallel".to_string(),
+                ],
+                conclusion: vec![
+                    "disjoint".to_string(),
+                    "overlap".to_string(),
+                    "parallel".to_string(),
+                    "common vertex".to_string(),
+                    "common segment".to_string(),
+                    "common edge".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["disjoint".to_string(), "overlap".to_string()],
+                conclusion: vec![
+                    "disjoint".to_string(),
+                    "overlap".to_string(),
+                    "parallel".to_string(),
+                    "common vertex".to_string(),
+                    "common segment".to_string(),
+                    "common edge".to_string(),
+                ],
+            },
+        ];
+
+        let expected_context = Context::from_csv(
+            r#",disjoint,overlap,parallel,common vertex,common segment,common edge
+              1,        ,       ,        ,             ,              ,           
+              2,   x    ,       ,        ,             ,              ,           
+              3,        ,   x   ,        ,             ,              ,           
+              4,        ,       ,        ,      x      ,              ,           
+              5,   x    ,       ,    x   ,             ,              ,           
+              6,        ,   x   ,    x   ,             ,              ,           
+              7,        ,       ,    x   ,             ,       x      ,           
+              8,        ,       ,    x   ,      x      ,              ,           
+              9,        ,       ,    x   ,      x      ,       x      ,     x     
+             10,        ,   x   ,    x   ,      x      ,       x      ,     x     
+             11,        ,   x   ,        ,      x      ,              ,           
+             12,        ,   x   ,    x   ,             ,       x      ,           "#,
+        )
+        .unwrap();
+
+        assert_eq!(expected_basis, basis);
+        assert_eq!(expected_context, new);
     }
 }
