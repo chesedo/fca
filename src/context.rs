@@ -932,4 +932,200 @@ mod tests {
         assert_eq!(expected_basis, basis);
         assert_eq!(expected_context, new);
     }
+
+    #[test]
+    fn attribute_exploration_loopless_directed_graphs() {
+        let context = Context::from_csv(
+            r#",strongly connected,rooted,weakly connected,disconnected,acyclic,transitive,tournament
+              1,        x         ,   x  ,       x        ,            ,       ,          ,          
+              2,                  ,   x  ,       x        ,            ,   x   ,          ,          
+              3,                  ,      ,                ,      x     ,       ,          ,          
+              4,                  ,   x  ,       x        ,            ,   x   ,    x     ,     x    
+              5,                  ,   x  ,       x        ,            ,   x   ,    x     ,     x    
+              6,                  ,   x  ,       x        ,            ,   x   ,          ,          
+              7,        x         ,   x  ,       x        ,            ,       ,          ,          "#
+        )
+        .unwrap();
+
+        let (basis, new) = context.attribute_exploration(|premise, conclusion| {
+            let premise = premise.into_iter().map(|s| s.as_str()).collect::<Vec<_>>();
+            let conclusion = conclusion
+                .into_iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>();
+
+            match (&premise[..], &conclusion[..]) {
+                (
+                    ["tournament"],
+                    ["rooted", "weakly connected", "acyclic", "transitive", "tournament"],
+                ) => Some((
+                    None,
+                    vec![
+                        "strongly connected".to_string(),
+                        "weakly connected".to_string(),
+                        "rooted".to_string(),
+                    ],
+                )),
+                (["tournament"], ["rooted", "weakly connected", "tournament"]) => None,
+                (
+                    ["transitive"],
+                    ["rooted", "weakly connected", "acyclic", "transitive", "tournament"],
+                ) => Some((
+                    None,
+                    vec![
+                        "weakly connected".to_string(),
+                        "rooted".to_string(),
+                        "acyclic".to_string(),
+                    ],
+                )),
+                (["transitive"], ["rooted", "weakly connected", "acyclic", "transitive"]) => {
+                    Some((
+                        None,
+                        vec![
+                            "strongly connected".to_string(),
+                            "weakly connected".to_string(),
+                            "rooted".to_string(),
+                        ],
+                    ))
+                }
+                (["transitive"], ["rooted", "weakly connected", "transitive"]) => Some((
+                    None,
+                    vec!["weakly connected".to_string(), "acyclic".to_string()],
+                )),
+                (["transitive"], ["weakly connected", "transitive"]) => Some((
+                    None,
+                    vec!["disconnected".to_string(), "acyclic".to_string()],
+                )),
+                (["disconnected", "transitive"], ["disconnected", "acyclic", "transitive"]) => {
+                    Some((None, Vec::new()))
+                }
+                (["acyclic", "disconnected"], ["disconnected", "acyclic", "transitive"]) => {
+                    Some((None, Vec::new()))
+                }
+                (["disconnected", "weakly connected"], ["strongly connected", "rooted", "weakly connected", "disconnected", "acyclic", "transitive", "tournament"]) => {
+                    None
+                }
+                (["rooted"], ["rooted", "weakly connected"]) => {
+                    None
+                }
+                (["rooted", "tournament", "transitive", "weakly connected"], ["rooted", "weakly connected", "acyclic", "transitive", "tournament"]) => {
+                    None
+                }
+                (["acyclic", "rooted", "tournament", "weakly connected"], ["rooted", "weakly connected", "acyclic", "transitive", "tournament"]) => {
+                    None
+                }
+                (["strongly connected"], ["strongly connected", "rooted", "weakly connected"]) => {
+                    None
+                }
+                (["acyclic", "rooted", "strongly connected", "weakly connected"], ["strongly connected", "rooted", "weakly connected", "disconnected", "acyclic", "transitive", "tournament"]) => {
+                    None
+                }
+                _ => panic!("did not expect oracle calls: premise = {:?}, conslusion = {:?}", premise, conclusion),
+            }
+        });
+
+        let expected_basis = vec![
+            Implication {
+                premise: vec!["tournament".to_string()],
+                conclusion: vec![
+                    "rooted".to_string(),
+                    "weakly connected".to_string(),
+                    "tournament".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["disconnected".to_string(), "weakly connected".to_string()],
+                conclusion: vec![
+                    "strongly connected".to_string(),
+                    "rooted".to_string(),
+                    "weakly connected".to_string(),
+                    "disconnected".to_string(),
+                    "acyclic".to_string(),
+                    "transitive".to_string(),
+                    "tournament".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["rooted".to_string()],
+                conclusion: vec!["rooted".to_string(), "weakly connected".to_string()],
+            },
+            Implication {
+                premise: vec![
+                    "rooted".to_string(),
+                    "tournament".to_string(),
+                    "transitive".to_string(),
+                    "weakly connected".to_string(),
+                ],
+                conclusion: vec![
+                    "rooted".to_string(),
+                    "weakly connected".to_string(),
+                    "acyclic".to_string(),
+                    "transitive".to_string(),
+                    "tournament".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec![
+                    "acyclic".to_string(),
+                    "rooted".to_string(),
+                    "tournament".to_string(),
+                    "weakly connected".to_string(),
+                ],
+                conclusion: vec![
+                    "rooted".to_string(),
+                    "weakly connected".to_string(),
+                    "acyclic".to_string(),
+                    "transitive".to_string(),
+                    "tournament".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec!["strongly connected".to_string()],
+                conclusion: vec![
+                    "strongly connected".to_string(),
+                    "rooted".to_string(),
+                    "weakly connected".to_string(),
+                ],
+            },
+            Implication {
+                premise: vec![
+                    "acyclic".to_string(),
+                    "rooted".to_string(),
+                    "strongly connected".to_string(),
+                    "weakly connected".to_string(),
+                ],
+                conclusion: vec![
+                    "strongly connected".to_string(),
+                    "rooted".to_string(),
+                    "weakly connected".to_string(),
+                    "disconnected".to_string(),
+                    "acyclic".to_string(),
+                    "transitive".to_string(),
+                    "tournament".to_string(),
+                ],
+            },
+        ];
+
+        let expected_context = Context::from_csv(
+            r#",strongly connected,rooted,weakly connected,disconnected,acyclic,transitive,tournament
+              1,        x         ,   x  ,       x        ,            ,       ,          ,          
+              2,                  ,   x  ,       x        ,            ,   x   ,          ,          
+              3,                  ,      ,                ,      x     ,       ,          ,          
+              4,                  ,   x  ,       x        ,            ,   x   ,    x     ,     x    
+              5,                  ,   x  ,       x        ,            ,   x   ,    x     ,     x    
+              6,                  ,   x  ,       x        ,            ,   x   ,          ,          
+              7,        x         ,   x  ,       x        ,            ,       ,          ,          
+              8,        x         ,   x  ,       x        ,            ,       ,          ,     x    
+              9,                  ,   x  ,       x        ,            ,   x   ,    x     ,          
+             10,        x         ,   x  ,       x        ,            ,       ,    x     ,          
+             11,                  ,      ,       x        ,            ,   x   ,    x     ,          
+             12,                  ,      ,                ,      x     ,   x   ,    x     ,          
+             13,                  ,      ,                ,      x     ,       ,    x     ,          
+             14,                  ,      ,                ,      x     ,   x   ,          ,          "#
+        )
+        .unwrap();
+
+        assert_eq!(expected_basis, basis);
+        assert_eq!(expected_context, new);
+    }
 }
