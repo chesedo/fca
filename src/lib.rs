@@ -1,8 +1,10 @@
 #![feature(drain_filter)]
 
+mod concept;
 mod context;
 mod implications;
 
+pub use concept::Concept;
 pub use context::Context;
 
 pub fn next_closure<'a, F>(set: &[String], subset: &[String], closure: F) -> Option<Vec<String>>

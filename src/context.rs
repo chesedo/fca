@@ -6,7 +6,7 @@ use ndarray::{iter::Lanes, Array, Array2, ArrayView, Axis, Dim};
 
 use crate::{
     implications::{preclosure_operator, Implication},
-    next_closure,
+    next_closure, Concept,
 };
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
@@ -144,7 +144,7 @@ impl Context {
         self.array.get((object_index, attribute_index)).copied()
     }
 
-    pub fn concepts(&self) -> Vec<Vec<String>> {
+    pub fn concepts(&self) -> Vec<Concept> {
         let a: Vec<String> = self
             .attributes()
             .into_iter()
@@ -156,7 +156,10 @@ impl Context {
 
         while current != None {
             let c = current.unwrap();
-            concepts.push(c.clone());
+            concepts.push(Concept {
+                extents: self.extents(&c).unwrap(),
+                intents: c.clone(),
+            });
             current = next_closure(&a[..], &c[..], |n| self.closure_extents(n));
         }
 
@@ -291,7 +294,7 @@ impl fmt::Display for Context {
 
 #[cfg(test)]
 mod tests {
-    use crate::implications::Implication;
+    use crate::{implications::Implication, Concept};
 
     use super::Context;
 
@@ -511,18 +514,203 @@ mod tests {
         .unwrap();
 
         let expected = vec![
-            vec![],
-            vec!["f"],
-            vec!["e", "f"],
-            vec!["c"],
-            vec!["c", "f"],
-            vec!["c", "e", "f"],
-            vec!["c", "d", "f"],
-            vec!["b"],
-            vec!["b", "c"],
-            vec!["b", "c", "e", "f"],
-            vec!["b", "c", "d", "e", "f"],
-            vec!["a", "b", "c", "d", "e", "f"],
+            Concept {
+                intents: Vec::new(),
+                extents: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "6".to_string(),
+                    "7".to_string(),
+                    "8".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["f".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "7".to_string(),
+                    "8".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["e".to_string(), "f".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "7".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["c".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "5".to_string(),
+                    "7".to_string(),
+                    "8".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["c".to_string(), "f".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "5".to_string(),
+                    "7".to_string(),
+                    "8".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["c".to_string(), "e".to_string(), "f".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "5".to_string(),
+                    "7".to_string(),
+                    "9".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["c".to_string(), "d".to_string(), "f".to_string()],
+                extents: vec!["8".to_string(), "10".to_string()],
+            },
+            Concept {
+                intents: vec!["b".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "6".to_string(),
+                    "10".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["b".to_string(), "c".to_string()],
+                extents: vec!["1".to_string(), "2".to_string(), "10".to_string()],
+            },
+            Concept {
+                intents: vec![
+                    "b".to_string(),
+                    "c".to_string(),
+                    "e".to_string(),
+                    "f".to_string(),
+                ],
+                extents: vec!["1".to_string(), "10".to_string()],
+            },
+            Concept {
+                intents: vec![
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                    "f".to_string(),
+                ],
+                extents: vec!["10".to_string()],
+            },
+            Concept {
+                intents: vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                    "f".to_string(),
+                ],
+                extents: Vec::new(),
+            },
+        ];
+
+        assert_eq!(context.concepts(), expected);
+    }
+
+    #[test]
+    fn concepts_triangles() {
+        let context = Context::from_csv(
+            r#",a,b,c,d,e
+              1, ,x, ,x, 
+              2, ,x, , ,x
+              3, , ,x, , 
+              4,x,x,x, , 
+              5, , , ,x, 
+              6, ,x,x, , 
+              7, , , , ,x"#,
+        )
+        .unwrap();
+
+        let expected = vec![
+            Concept {
+                intents: Vec::new(),
+                extents: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "3".to_string(),
+                    "4".to_string(),
+                    "5".to_string(),
+                    "6".to_string(),
+                    "7".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["e".to_string()],
+                extents: vec!["2".to_string(), "7".to_string()],
+            },
+            Concept {
+                intents: vec!["d".to_string()],
+                extents: vec!["1".to_string(), "5".to_string()],
+            },
+            Concept {
+                intents: vec!["c".to_string()],
+                extents: vec!["3".to_string(), "4".to_string(), "6".to_string()],
+            },
+            Concept {
+                intents: vec!["b".to_string()],
+                extents: vec![
+                    "1".to_string(),
+                    "2".to_string(),
+                    "4".to_string(),
+                    "6".to_string(),
+                ],
+            },
+            Concept {
+                intents: vec!["b".to_string(), "e".to_string()],
+                extents: vec!["2".to_string()],
+            },
+            Concept {
+                intents: vec!["b".to_string(), "d".to_string()],
+                extents: vec!["1".to_string()],
+            },
+            Concept {
+                intents: vec!["b".to_string(), "c".to_string()],
+                extents: vec!["4".to_string(), "6".to_string()],
+            },
+            Concept {
+                intents: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+                extents: vec!["4".to_string()],
+            },
+            Concept {
+                intents: vec![
+                    "a".to_string(),
+                    "b".to_string(),
+                    "c".to_string(),
+                    "d".to_string(),
+                    "e".to_string(),
+                ],
+                extents: Vec::new(),
+            },
         ];
 
         assert_eq!(context.concepts(), expected);
