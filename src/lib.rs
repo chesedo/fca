@@ -3,9 +3,11 @@
 mod concept;
 mod context;
 mod implications;
+mod lattice;
 
 pub use concept::Concept;
 pub use context::Context;
+pub use lattice::Lattice;
 
 pub fn next_closure<'a, F>(set: &[String], subset: &[String], closure: F) -> Option<Vec<String>>
 where
